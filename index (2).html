@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Adivina el Número</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: una sola tarjeta de juego centrada sobre fondo blanco. Tablero arriba, entrada en medio, historial abajo. */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f4f8ff;
+  --surface-2: #ffffff;
+  --ink: #0b1f44;
+  --muted: #4a5d85;
+  --line: #c9d8f3;
+  --accent: #1d5be6;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(29, 91, 230, .12);
+  --accent-glow: rgba(29, 91, 230, .28);
+  --hl: #e0a100;
+  --hot: #d93a2b;
+  --warm: #b7791f;
+  --mild: #0d8ac7;
+  --cold: #6b7a99;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+:root[data-theme="dark"] { color-scheme: light; }
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.55;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { position: relative; z-index: 1; max-width: 640px; margin-inline: auto; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(34px, 8vw, 54px); line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 8px; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 46ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+
+/* Botones redondos con círculo, igual que el portafolio */
+.btn {
+  position: relative; overflow: hidden; isolation: isolate;
+  font-family: var(--font-mono); font-size: 15px; font-weight: 500; line-height: 1.3;
+  display: inline-flex; align-items: center; gap: 14px;
+  padding: 6px 6px 6px 22px; border-radius: 999px; border: 2px solid var(--accent);
+  background: var(--accent); color: var(--accent-ink); cursor: pointer;
+  box-shadow: 0 10px 24px -10px var(--accent); transition: transform .2s ease, box-shadow .2s ease;
+}
+.btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.38) 50%, transparent 70%); transform: translateX(-120%); transition: transform .6s ease; }
+.btn:hover { transform: translateY(-3px); box-shadow: 0 18px 30px -12px var(--accent); }
+.btn:hover::before { transform: translateX(120%); }
+.btn:active { transform: translateY(0) scale(.98); }
+.btn .dot { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--accent-ink); color: var(--accent); transition: transform .3s ease; }
+.btn .dot svg { width: 16px; height: 16px; }
+.btn:hover .dot { transform: rotate(-45deg) scale(1.1); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: clamp(18px, 4vw, 28px); box-shadow: 0 24px 50px -32px rgba(11, 31, 68, .45); }
+
+/* Dificultad */
+.niveles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; padding: 0; border: 0; min-width: 0; }
+.niveles legend { padding: 0; margin-bottom: 10px; font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.nivel input { position: absolute; opacity: 0; pointer-events: none; }
+.nivel label { display: block; cursor: pointer; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; height: 100%; background: var(--surface-2); transition: border-color .2s, transform .2s, background .2s; }
+.nivel label:hover { transform: translateY(-2px); border-color: var(--accent); }
+.nivel input:checked + label { border-color: var(--accent); background: var(--accent-soft); }
+.nivel input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: 3px; }
+.nivel strong { display: block; font-family: var(--font-display); font-size: 18px; }
+.nivel span { display: block; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+
+/* Tablero */
+.mensaje { min-height: 3em; margin: 0 0 12px; font-size: 17px; }
+.mensaje b { color: var(--accent); }
+.vidas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; align-items: center; }
+.vidas .et { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.vida { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px -3px var(--accent); transition: all .3s ease; }
+.vida.gastada { background: transparent; border: 2px solid var(--line); box-shadow: none; transform: scale(.8); }
+
+/* Recta numérica: la zona verde es donde puede estar el número */
+.recta { margin: 4px 0 8px; }
+.pista { position: relative; height: 16px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.zona { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: linear-gradient(90deg, rgba(29,91,230,.3), rgba(29,91,230,.7)); transition: left .4s ease, width .4s ease; }
+.marca { position: absolute; top: -5px; width: 4px; height: 24px; border-radius: 2px; background: var(--hl); transform: translateX(-50%); }
+.limites { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.limites .centro { color: var(--accent); }
+
+/* Entrada */
+form { display: flex; flex-wrap: nowrap; gap: 12px; align-items: flex-end; margin: 18px 0 6px; }
+.campo { flex: 1 1 0; min-width: 0; }
+form .btn { flex: none; margin-bottom: 4px; }
+.campo label { display: block; font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+input[type="number"] {
+  width: 100%; font-family: var(--font-display); font-weight: 700; font-size: 34px; text-align: center;
+  background: var(--surface-2); color: var(--ink); border: 2px solid var(--line); border-radius: 14px; padding: 8px 12px;
+  -moz-appearance: textfield; appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"]:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 4px var(--accent-glow); }
+input[type="number"][disabled] { opacity: .5; }
+.error { min-height: 1.6em; margin: 6px 0 0; color: var(--hot); font-size: 15px; }
+
+/* Historial */
+.historial { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 8px 0 0; min-height: 40px; }
+.ficha { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 8px; border-radius: 999px; font-family: var(--font-mono); font-size: 14px; border: 1.5px solid currentColor; animation: entra .35s ease; }
+.ficha i { font-style: normal; font-size: 12px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: currentColor; }
+.ficha i b { color: var(--bg); font-weight: 700; line-height: 1; }
+.t-hot { color: var(--hot); } .t-warm { color: var(--warm); } .t-mild { color: var(--mild); } .t-cold { color: var(--cold); } .t-win { color: var(--accent); }
+.vacio { color: var(--muted); font-size: 15px; margin: 0; align-self: center; }
+@keyframes entra { from { opacity: 0; transform: scale(.7); } }
+
+/* Resultado y estadísticas */
+.final { margin-top: 18px; padding: 18px; border-radius: 14px; border: 2px solid var(--accent); background: var(--accent-soft); animation: entra .4s ease; }
+.final.perdio { border-color: var(--hot); background: rgba(217,58,43,.08); }
+.final h2 { font-family: var(--font-display); font-size: 26px; margin: 0 0 4px; }
+.final p { margin: 0 0 14px; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.stat { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface-2); text-align: center; min-width: 0; }
+.stat b { display: block; font-family: var(--font-display); font-size: 30px; line-height: 1.1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.stat span { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.pie { margin-top: 26px; color: var(--muted); font-size: 14px; text-align: center; font-family: var(--font-mono); }
+
+/* Confeti */
+.confeti { position: fixed; top: -12px; width: 9px; height: 14px; border-radius: 2px; z-index: 5; pointer-events: none; animation: cae linear forwards; }
+@keyframes cae { to { transform: translateY(105vh) rotate(720deg); opacity: .9; } }
+@media (max-width: 440px) {
+  body { padding-block: 16px 36px; }
+  .btn { font-size: 14px; gap: 10px; padding-left: 16px; }
+  .btn .dot { width: 30px; height: 30px; }
+  input[type="number"] { font-size: 28px; padding: 6px 8px; }
+  .stat b { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Un juego de Dominick</p>
+  <h1>Adivina el <span>número</span></h1>
+  <p class="sub">Pensé un número secreto. Escribe tu intento y te digo si el secreto es más alto o más bajo, y qué tan cerca estás.</p>
+
+  <div class="card">
+    <fieldset class="niveles" id="niveles">
+      <legend>Elige una dificultad</legend>
+      <div class="nivel"><input type="radio" name="nivel" id="n1" value="1"><label for="n1"><strong>Fácil</strong><span>1 al 50 · 10 intentos</span></label></div>
+      <div class="nivel"><input type="radio" name="nivel" id="n2" value="2" checked><label for="n2"><strong>Normal</strong><span>1 al 100 · 7 intentos</span></label></div>
+      <div class="nivel"><input type="radio" name="nivel" id="n3" value="3"><label for="n3"><strong>Difícil</strong><span>1 al 200 · 8 intentos</span></label></div>
+    </fieldset>
+
+    <p class="mensaje" id="mensaje" role="status" aria-live="polite"></p>
+
+    <div class="vidas" id="vidas" aria-label="Intentos que te quedan"></div>
+
+    <div class="recta" aria-hidden="true">
+      <div class="pista" id="pista"><div class="zona" id="zona"></div></div>
+      <div class="limites"><span id="limMin">1</span><span class="centro" id="limCentro"></span><span id="limMax">100</span></div>
+    </div>
+
+    <form id="formulario" autocomplete="off" novalidate>
+      <div class="campo">
+        <label for="numero">Tu número</label>
+        <input type="number" id="numero" inputmode="numeric" step="1">
+      </div>
+      <button class="btn" type="submit" id="adivinar">Adivinar<span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+    </form>
+    <p class="error" id="error" role="alert"></p>
+
+    <p class="eyebrow" style="margin-top:14px">Tus intentos</p>
+    <ul class="historial" id="historial"></ul>
+
+    <div id="final" hidden></div>
+
+    <div class="stats">
+      <div class="stat"><b id="sPartidas">0</b><span>Partidas</span></div>
+      <div class="stat"><b id="sGanadas">0</b><span>Ganadas</span></div>
+      <div class="stat"><b id="sMejor">–</b><span>Mejor marca</span></div>
+    </div>
+  </div>
+  <p class="pie">Hecho en Python y JavaScript por Dominick Alejandro</p>
+</div>
+
+<script>
+(function () {
+  var NIVELES = {
+    '1': { nombre: 'Fácil', min: 1, max: 50, intentos: 10 },
+    '2': { nombre: 'Normal', min: 1, max: 100, intentos: 7 },
+    '3': { nombre: 'Difícil', min: 1, max: 200, intentos: 8 }
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var juego = null;
+  var stats = { partidas: 0, ganadas: 0, mejor: null };
+
+  function cargarStats() {
+    try {
+      var s = JSON.parse(localStorage.getItem('adivina-stats'));
+      if (s && typeof s.partidas === 'number') stats = s;
+    } catch (e) {}
+  }
+  function guardarStats() { try { localStorage.setItem('adivina-stats', JSON.stringify(stats)); } catch (e) {} }
+  function pintarStats() {
+    $('sPartidas').textContent = stats.partidas;
+    $('sGanadas').textContent = stats.ganadas;
+    $('sMejor').textContent = stats.mejor === null ? '–' : stats.mejor;
+  }
+
+  function temperatura(distancia, rango) {
+    var c = distancia / rango;
+    if (c <= 0.05) return { clase: 't-hot', texto: '¡Hirviendo! Muy cerca', sig: '!' };
+    if (c <= 0.15) return { clase: 't-warm', texto: 'Caliente', sig: '+' };
+    if (c <= 0.30) return { clase: 't-mild', texto: 'Tibio', sig: '~' };
+    return { clase: 't-cold', texto: 'Frío', sig: '–' };
+  }
+
+  function nivelElegido() {
+    var r = document.querySelector('input[name="nivel"]:checked');
+    return NIVELES[r ? r.value : '2'];
+  }
+
+  function nueva() {
+    var n = nivelElegido();
+    var rango = n.max - n.min + 1;
+    juego = {
+      n: n, rango: rango,
+      secreto: n.min + Math.floor(Math.random() * rango),
+      lo: n.min, hi: n.max, intentos: [], fin: false
+    };
+    $('final').hidden = true; $('final').innerHTML = '';
+    $('historial').innerHTML = '<li class="vacio">Todavía no has intentado.</li>';
+    $('error').textContent = '';
+    $('mensaje').innerHTML = 'Pensé un número entre <b>' + n.min + '</b> y <b>' + n.max + '</b>. Tienes <b>' + n.intentos + '</b> intentos.';
+    $('numero').disabled = false; $('adivinar').disabled = false;
+    $('numero').min = n.min; $('numero').max = n.max; $('numero').value = '';
+    $('numero').focus({ preventScroll: true });
+    pintar();
+  }
+
+  $('numero').addEventListener('focus', function () {
+    var f = $('formulario');
+    setTimeout(function () { try { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }, 250);
+  });
+
+  function pintar() {
+    var n = juego.n, usados = juego.intentos.length;
+    var v = $('vidas');
+    v.innerHTML = '<span class="et">Intentos</span>';
+    for (var i = 0; i < n.intentos; i++) {
+      var s = document.createElement('span');
+      s.className = 'vida' + (i < usados ? ' gastada' : '');
+      v.appendChild(s);
+    }
+    var tot = n.max - n.min;
+    var izq = (juego.lo - n.min) / tot * 100;
+    var ancho = (juego.hi - juego.lo) / tot * 100;
+    var z = $('zona');
+    z.style.left = izq + '%'; z.style.width = Math.max(ancho, 1.5) + '%';
+    var pista = $('pista');
+    Array.prototype.slice.call(pista.querySelectorAll('.marca')).forEach(function (m) { m.remove(); });
+    juego.intentos.forEach(function (x) {
+      var m = document.createElement('span');
+      m.className = 'marca'; m.style.left = ((x - n.min) / tot * 100) + '%';
+      pista.appendChild(m);
+    });
+    $('limMin').textContent = n.min; $('limMax').textContent = n.max;
+    $('limCentro').textContent = juego.fin ? '' : 'puede estar entre ' + juego.lo + ' y ' + juego.hi;
+  }
+
+  function agregarFicha(num, clase, signo, texto) {
+    var h = $('historial');
+    var vacio = h.querySelector('.vacio'); if (vacio) vacio.remove();
+    var li = document.createElement('li');
+    li.className = 'ficha ' + clase;
+    li.innerHTML = '<i><b>' + signo + '</b></i>' + num + ' · ' + texto;
+    h.appendChild(li);
+  }
+
+  function confeti() {
+    if (reduce) return;
+    var cols = ['#1d5be6', '#4f8cff', '#0d8ac7', '#e0a100', '#ff6b5e'];
+    for (var i = 0; i < 60; i++) {
+      var d = document.createElement('div');
+      d.className = 'confeti';
+      d.style.left = Math.random() * 100 + 'vw';
+      d.style.background = cols[i % cols.length];
+      d.style.animationDuration = (2.2 + Math.random() * 2) + 's';
+      d.style.animationDelay = (Math.random() * 0.6) + 's';
+      document.body.appendChild(d);
+      setTimeout((function (el) { return function () { el.remove(); }; })(d), 5500);
+    }
+  }
+
+  function terminar(gano) {
+    juego.fin = true;
+    $('numero').disabled = true; $('adivinar').disabled = true;
+    stats.partidas++;
+    var usados = juego.intentos.length;
+    if (gano) {
+      stats.ganadas++;
+      if (stats.mejor === null || usados < stats.mejor) stats.mejor = usados;
+      confeti();
+    }
+    guardarStats(); pintarStats(); pintar();
+    var f = $('final');
+    f.className = 'final' + (gano ? '' : ' perdio');
+    f.innerHTML = gano
+      ? '<h2>¡Ganaste!</h2><p>Adivinaste el ' + juego.secreto + ' en ' + usados + ' intento' + (usados === 1 ? '' : 's') + '.</p>'
+      : '<h2>Se acabaron los intentos</h2><p>El número secreto era el <b>' + juego.secreto + '</b>. ¡Inténtalo otra vez!</p>';
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn'; b.id = 'otra';
+    b.innerHTML = 'Jugar otra vez<span class="dot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>';
+    b.addEventListener('click', nueva);
+    f.appendChild(b);
+    f.hidden = false;
+    $('mensaje').textContent = gano ? 'Lo lograste.' : 'Esta vez no se pudo.';
+    b.focus({ preventScroll: true });
+  }
+
+  $('formulario').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!juego || juego.fin) return;
+    var n = juego.n, texto = $('numero').value.trim();
+    $('error').textContent = '';
+    if (texto === '' || !/^-?\d+$/.test(texto)) { $('error').textContent = 'Escribe un número entero.'; return; }
+    var x = parseInt(texto, 10);
+    if (x < n.min || x > n.max) { $('error').textContent = 'El número debe estar entre ' + n.min + ' y ' + n.max + '.'; return; }
+    if (juego.intentos.indexOf(x) !== -1) { $('error').textContent = 'Ya probaste el ' + x + '. Elige otro.'; return; }
+
+    juego.intentos.push(x);
+    $('numero').value = '';
+
+    if (x === juego.secreto) {
+      agregarFicha(x, 't-win', '★', 'correcto');
+      terminar(true);
+      return;
+    }
+    var mas = x < juego.secreto;
+    if (mas) juego.lo = Math.max(juego.lo, x + 1); else juego.hi = Math.min(juego.hi, x - 1);
+    var t = temperatura(Math.abs(x - juego.secreto), juego.rango);
+    agregarFicha(x, t.clase, mas ? '▲' : '▼', (mas ? 'más alto' : 'más bajo') + ' · ' + t.texto.toLowerCase());
+    $('mensaje').innerHTML = (mas ? '▲ Más alto' : '▼ Más bajo') + ' · <b>' + t.texto + '</b>';
+    if (juego.intentos.length >= n.intentos) { terminar(false); return; }
+    pintar();
+    $('numero').focus({ preventScroll: true });
+  });
+
+  document.getElementById('niveles').addEventListener('change', function () {
+    if (juego) nueva();
+  });
+
+
+  cargarStats(); pintarStats(); nueva();
+})();
+</script>
+</body>
+</html>
